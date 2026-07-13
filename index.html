@@ -6,7 +6,6 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Kea King 养成游戏</title>
-    <!-- 改用稳定版 CDN 加载 Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -256,7 +255,6 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 </div>
 
 <script>
-    // 已使用你的 Supabase 凭据，直接可用
     const SUPABASE_URL = 'https://sbtefkcqrfnojmntpefy.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidGVma2NxcmZub2ptbnRwZWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzM2NjgsImV4cCI6MjA5OTM0OTY2OH0.vAaoXCNqpPDLlESsv7bhT0abzcLQyLtdKL3NrZplcLo';
     
@@ -299,7 +297,6 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
     async function init() {
         spawnParticles();
-        // 设置超时保护：最多等 6 秒强制进入大厅
         const timeout = setTimeout(() => {
             document.getElementById('loading').classList.add('hidden');
             if (!playerName) {
@@ -376,22 +373,38 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
         });
     }
 
+    // 健壮版互动入口
     async function openInteract(friend) {
         currentFriend = friend;
         document.getElementById('interact-modal').classList.remove('hidden');
         document.getElementById('interact-img').src = friend.photo;
         document.getElementById('interact-name').textContent = friend.name;
 
-        const { data } = await supabase.from('rankings')
-            .select('affection').eq('friend_name', friend.name).eq('player_name', playerName).maybeSingle();
-        document.getElementById('interact-affection').textContent = data?.affection || 0;
+        // 获取好感度（出错不影响剧情）
+        try {
+            const { data } = await supabase.from('rankings')
+                .select('affection').eq('friend_name', friend.name).eq('player_name', playerName).maybeSingle();
+            document.getElementById('interact-affection').textContent = data?.affection || 0;
+        } catch (e) {
+            document.getElementById('interact-affection').textContent = '0';
+        }
 
-        if (!(await canInteract(friend.name))) {
+        // 检查每日互动
+        let alreadyInteracted = false;
+        try {
+            alreadyInteracted = !(await canInteract(friend.name));
+        } catch (e) {
+            alreadyInteracted = false;
+        }
+
+        if (alreadyInteracted) {
             document.getElementById('interact-dialog').textContent = `今天已经和 ${friend.name} 互动过了~明天再来吧！`;
             document.getElementById('interact-choices').innerHTML = '';
             document.getElementById('minigame-area').classList.add('hidden');
             return;
         }
+
+        // 无论数据库状态如何，强制开始剧情
         Math.random() < 0.7 ? startDialog(friend) : startMinigame(friend);
     }
 
